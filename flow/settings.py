@@ -214,4 +214,4 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
 }
 
-CSRF_TRUSTED_ORIGINS = ["https://api-task-flow-production.up.railway.app"]
+CSRF_TRUSTED_ORIGINS = ["https://web-production-flow-v2.up.railway.app"]
