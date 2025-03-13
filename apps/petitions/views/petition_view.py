@@ -42,7 +42,7 @@ class PetitionListView(ListAPIView):
     """Vista optimizada para listar peticiones con filtros avanzados."""
 
     queryset = Petition.active_objects.select_related("user", "department", "company").all()
-    serializer_class = PetitionModelserializer
+    serializer_class = PetitionFullDetailserializer
     permission_classes = [IsAuthenticated, CanViewPetition]
 
     @swagger_auto_schema(
