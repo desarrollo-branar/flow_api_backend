@@ -39,107 +39,65 @@ from core.functions import filter_queryset_by_group
 
 
 class PetitionListView(ListAPIView):
-    """Vista para listar peticiones con filtros avanzados."""
+    """Vista optimizada para listar peticiones con filtros avanzados."""
 
-    queryset = Petition.active_objects.all()
-    serializer_class = PetitionFullDetailserializer
+    queryset = Petition.active_objects.select_related("user", "department", "company").all()
+    serializer_class = PetitionModelserializer
     permission_classes = [IsAuthenticated, CanViewPetition]
 
     @swagger_auto_schema(
         manual_parameters=[
             openapi.Parameter(
-                "Authorization",
-                openapi.IN_HEADER,
+                "Authorization", openapi.IN_HEADER,
                 description="Token de autenticación. Usar el formato 'Token <ACCESS_TOKEN>'",
                 type=openapi.TYPE_STRING,
                 required=True,
                 default="Token <ACCESS_TOKEN>",
             ),
-            openapi.Parameter(
-                "date_from",
-                openapi.IN_QUERY,
-                description="Filtrar peticiones desde esta fecha (YYYY-MM-DD).",
-                type=openapi.TYPE_STRING,
-            ),
-            openapi.Parameter(
-                "date_until",
-                openapi.IN_QUERY,
-                description="Filtrar peticiones hasta esta fecha (YYYY-MM-DD).",
-                type=openapi.TYPE_STRING,
-            ),
-            openapi.Parameter(
-                "title",
-                openapi.IN_QUERY,
-                description="Buscar peticiones por título.",
-                type=openapi.TYPE_STRING,
-            ),
-            openapi.Parameter(
-                "user_id",
-                openapi.IN_QUERY,
-                description="Filtrar por usuario específico.",
-                type=openapi.TYPE_INTEGER,
-            ),
-            openapi.Parameter(
-                "department_id",
-                openapi.IN_QUERY,
-                description="Filtrar por departamento específico.",
-                type=openapi.TYPE_INTEGER,
-            ),
-            openapi.Parameter(
-                "company_id",
-                openapi.IN_QUERY,
-                description="Filtrar por empresa específica.",
-                type=openapi.TYPE_INTEGER,
-            ),
+            openapi.Parameter("date_from", openapi.IN_QUERY, description="Desde esta fecha (YYYY-MM-DD).", type=openapi.TYPE_STRING),
+            openapi.Parameter("date_until", openapi.IN_QUERY, description="Hasta esta fecha (YYYY-MM-DD).", type=openapi.TYPE_STRING),
+            openapi.Parameter("title", openapi.IN_QUERY, description="Buscar por título.", type=openapi.TYPE_STRING),
+            openapi.Parameter("user_id", openapi.IN_QUERY, description="Filtrar por usuario.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter("department_id", openapi.IN_QUERY, description="Filtrar por departamento.", type=openapi.TYPE_INTEGER),
+            openapi.Parameter("company_id", openapi.IN_QUERY, description="Filtrar por empresa.", type=openapi.TYPE_INTEGER),
         ],
         responses={200: PetitionFullDetailserializer(many=True)},
     )
     def get_queryset(self):
-        """Obtiene el queryset de peticiones aplicando filtros avanzados."""
+        """Obtiene el queryset optimizado de peticiones aplicando filtros avanzados."""
 
-        user = self.request.user  # Obtener usuario autenticado
-        queryset = super().get_queryset()
+        user = self.request.user  
+        queryset = filter_queryset_by_group(self.queryset, user)  # 🔥 Aplicar filtro por grupo
 
-        queryset = filter_queryset_by_group(super().get_queryset(), user)  # 🔥 Aplicar filtro por grupo
-
-        # 🔥 Diccionario para aplicar filtros dinámicos
+        # 🔥 Diccionario para filtros dinámicos
         filter_kwargs = {}
 
-        # 📌 Filtros directos
-        if self.request.query_params.get("user_email"):
-            filter_kwargs["user__email"] = self.request.query_params["user_email"]
+        if user_email := self.request.query_params.get("user_email"):
+            filter_kwargs["user__email"] = user_email
 
-        if self.request.query_params.get("department"):
-            filter_kwargs["department__id"] = self.request.query_params["department"]
+        if department_id := self.request.query_params.get("department"):
+            filter_kwargs["department__id"] = department_id
 
-        if self.request.query_params.get("company"):
-            filter_kwargs["company__id"] = self.request.query_params["company"]
+        if company_id := self.request.query_params.get("company"):
+            filter_kwargs["company__id"] = company_id
 
-        if self.request.query_params.get("status_approval"):
-            filter_kwargs["status_approval"] = self.request.query_params["status_approval"]
+        if status_approval := self.request.query_params.get("status_approval"):
+            filter_kwargs["status_approval"] = status_approval
 
-        # 📌 Filtros con búsqueda parcial
-        title = self.request.query_params.get("title")
-        if title:
-            queryset = queryset.filter(Q(title__icontains=title))  # 🔥 Buscar en el título
+        # 🔥 Filtrar por título (búsqueda parcial)
+        if title := self.request.query_params.get("title"):
+            queryset = queryset.filter(title__icontains=title)
 
-        # 📌 Filtros de rango de fechas
-        date_from = self.request.query_params.get("date_from")
-        if date_from:
-            parsed_date = parse_date(date_from)
-            print('parsed_date => ',parsed_date)
-            if parsed_date:
+        # 🔥 Filtrar por rango de fechas
+        if date_from := self.request.query_params.get("date_from"):
+            if parsed_date := parse_date(date_from):
                 filter_kwargs["created__gte"] = parsed_date
 
-        date_until = self.request.query_params.get("date_until")
-        if date_until:
-            parsed_date = parse_date(date_until)
-            if parsed_date:
+        if date_until := self.request.query_params.get("date_until"):
+            if parsed_date := parse_date(date_until):
                 filter_kwargs["created__lte"] = parsed_date
 
         # 🔥 Aplicar todos los filtros en una sola operación
-        print(filter_kwargs)
-        print('QUERY => ',queryset.filter(**filter_kwargs).query)
         return queryset.filter(**filter_kwargs)
 
 
